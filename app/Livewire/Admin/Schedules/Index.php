@@ -10,6 +10,9 @@ use App\Models\Location;
 use App\Models\UnitAc;
 use App\Models\User;
 use App\Support\Role;
+use App\Models\TechnicianLeave;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Carbon;
 
 class Index extends Component
 {
@@ -26,6 +29,7 @@ class Index extends Component
     public ?int $location_id = null;
     public ?string $scheduled_at = null;
     public ?int $assigned_user_id = null;
+    public ?int $technician_id = null;   // ⬅️ BARU
     public string $status = 'menunggu';
     public ?string $notes = null;
 
@@ -35,14 +39,15 @@ class Index extends Component
     protected function rules(): array
     {
         return [
-            'client_id' => ['required','exists:clients,id'],
-            'location_id' => ['required','exists:locations,id'],
-            'scheduled_at' => ['required','date'],
+            'client_id'        => ['required','exists:clients,id'],
+            'location_id'      => ['required','exists:locations,id'],
+            'scheduled_at'     => ['required','date'],
             'assigned_user_id' => ['nullable','exists:users,id'],
-            'status' => ['required','string','max:50'],
-            'notes' => ['nullable','string'],
-            'unit_ids' => ['array'],
-            'unit_ids.*' => ['integer','exists:unit_acs,id'],
+            'technician_id'    => ['nullable','exists:users,id'], // ⬅️ BARU (opsional)
+            'status'           => ['required','string','max:50'],
+            'notes'            => ['nullable','string'],
+            'unit_ids'         => ['array'],
+            'unit_ids.*'       => ['integer','exists:unit_acs,id'],
         ];
     }
 
@@ -70,34 +75,48 @@ class Index extends Component
 
         $s = MaintenanceSchedule::with('units')->findOrFail($id);
 
-        $this->client_id = $s->client_id;
-        $this->location_id = $s->location_id;
-        $this->scheduled_at = $s->scheduled_at?->format('Y-m-d\TH:i');
+        $this->client_id        = $s->client_id;
+        $this->location_id      = $s->location_id;
+        $this->scheduled_at     = $s->scheduled_at?->format('Y-m-d\TH:i');
         $this->assigned_user_id = $s->assigned_user_id;
-        $this->status = $s->status;
-        $this->notes = $s->notes;
+        $this->technician_id    = $s->technician_id;   // ⬅️ BARU
+        $this->status           = $s->status;
+        $this->notes            = $s->notes;
 
         $this->unit_ids = $s->units->pluck('id')->toArray();
     }
 
-    public function save(): void
-    {
-        $data = $this->validate();
+ public function save(): void
+{
+    $data = $this->validate();
 
-        if ($this->editingId && $this->editingId > 0) {
-            $schedule = MaintenanceSchedule::findOrFail($this->editingId);
-            $schedule->update($data);
-        } else {
-            $schedule = MaintenanceSchedule::create($data);
+    // ❗ Blokir jadwal pada hari cuti teknisi
+    if (!empty($data['assigned_user_id']) && !empty($data['scheduled_at'])) {
+        $overlap = TechnicianLeave::approved()
+            ->where('user_id', $data['assigned_user_id'])
+            ->overlaps(\Carbon\Carbon::parse($data['scheduled_at']))
+            ->exists();
+
+        if ($overlap) {
+            throw ValidationException::withMessages([
+                'assigned_user_id' => 'Teknisi sedang cuti pada tanggal tersebut.',
+            ]);
         }
-
-        $schedule->units()->sync($this->unit_ids);
-
-        session()->flash('ok', $this->editingId ? 'Jadwal diperbarui.' : 'Jadwal dibuat.');
-        $this->resetForm();
-        $this->editingId = null;
     }
 
+    // lanjut proses simpan seperti sebelumnya...
+    if ($this->editingId && $this->editingId > 0) {
+        $schedule = \App\Models\MaintenanceSchedule::findOrFail($this->editingId);
+        $schedule->update($data);
+    } else {
+        $schedule = \App\Models\MaintenanceSchedule::create($data);
+    }
+    $schedule->units()->sync($this->unit_ids);
+
+    session()->flash('ok', $this->editingId ? 'Jadwal diperbarui.' : 'Jadwal dibuat.');
+    $this->resetForm();
+    $this->editingId = null;
+}
     public function delete(int $id): void
     {
         MaintenanceSchedule::findOrFail($id)->delete();
@@ -105,7 +124,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    /** Admin menyetujui usulan jadwal baru dari klien */
     public function approveReschedule(int $id): void
     {
         $s = MaintenanceSchedule::findOrFail($id);
@@ -115,19 +133,17 @@ class Index extends Component
             return;
         }
 
-        // Terapkan tanggal usulan klien
         $s->scheduled_at          = $s->client_requested_date;
-        $s->client_response       = 'confirmed';           // dianggap disetujui
+        $s->client_response       = 'confirmed';
         $s->client_response_at    = now();
         $s->client_response_note  = null;
         $s->client_requested_date = null;
-        $s->status                = 'menunggu';           // kembali ke antrian normal
+        $s->status                = 'menunggu';
         $s->save();
 
         session()->flash('ok', 'Permintaan jadwal ulang disetujui & jadwal diperbarui.');
     }
 
-    /** Admin menolak usulan jadwal baru dari klien */
     public function rejectReschedule(int $id): void
     {
         $s = MaintenanceSchedule::findOrFail($id);
@@ -137,8 +153,7 @@ class Index extends Component
             return;
         }
 
-        // Batalkan usulan, jadwal tetap pada tanggal lama
-        $s->client_response       = null;     // kembali ke "Belum Ada"
+        $s->client_response       = null;
         $s->client_response_at    = now();
         $s->client_response_note  = null;
         $s->client_requested_date = null;
@@ -152,6 +167,7 @@ class Index extends Component
     {
         $this->reset([
             'client_id','location_id','scheduled_at','assigned_user_id',
+            'technician_id', // ⬅️ BARU
             'status','notes','unit_ids'
         ]);
         $this->status = 'menunggu';
@@ -168,7 +184,7 @@ class Index extends Component
                 ->orderBy('name')->get(['id','name']);
         }
 
-        $techs = User::where('role', Role::TEKNISI)->orderBy('name')->get(['id','name']);
+        $techs = User::where('role', Role::TEKNISI)->orderBy('name')->get(['id','name']); // ⬅️ dipakai dropdown
 
         $unitsForLocation = collect();
         if ($this->location_id) {

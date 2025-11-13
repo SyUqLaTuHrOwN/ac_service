@@ -3,33 +3,56 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-/**
- * @mixin IdeHelperMaintenanceReport
- */
 class MaintenanceReport extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
-        'schedule_id','technician_id',
-        'started_at','finished_at',
-        'start_photo_path','end_photo_path','receipt_path',
-        'units_serviced','notes','photos','invoice_number',
-        'status','verified_by_admin_id','verified_at',
+        'schedule_id',
+        'technician_id',
+        'units_serviced',
+        'notes',
+        'photos',               // simpan array path bila pakai multiple
+        'invoice_number',
+        'status',               // draft|submitted|revisi|disetujui
+        'verified_by_admin_id',
+        'verified_at',
+
+        // jika kamu sudah menambahkan kolom start/finish & files tunggal
+        'started_at',
+        'finished_at',
+        'start_photo_path',
+        'end_photo_path',
+        'receipt_path',
     ];
 
     protected $casts = [
+        'photos'      => 'array',
+        'verified_at' => 'datetime',
         'started_at'  => 'datetime',
         'finished_at' => 'datetime',
-        'verified_at' => 'datetime',
-        'photos'      => 'array', 
     ];
 
-    public function schedule()   { return $this->belongsTo(MaintenanceSchedule::class, 'schedule_id'); }
-    public function technician() { return $this->belongsTo(User::class, 'technician_id'); }
-    public function verifier()   { return $this->belongsTo(User::class, 'verified_by_admin_id'); }
-public function feedback(){ return $this->hasOne(\App\Models\Feedback::class,'report_id'); }
+    /** Laporan milik satu jadwal */
+    public function schedule()
+    {
+        return $this->belongsTo(\App\Models\MaintenanceSchedule::class, 'schedule_id');
+    }
 
+    /** Teknisi yang mengerjakan laporan */
+    public function technician()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'technician_id');
+    }
+
+    /** Admin yang memverifikasi */
+    public function verifier()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'verified_by_admin_id');
+    }
+
+      public function feedback()
+    {
+        // satu laporan punya satu feedback dari client
+        return $this->hasOne(\App\Models\Feedback::class, 'report_id');
+    }
 }

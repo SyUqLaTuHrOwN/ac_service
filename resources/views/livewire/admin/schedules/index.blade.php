@@ -173,15 +173,17 @@
           @error('scheduled_at')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
 
-        <div>
-          <label class="text-sm">Teknisi (opsional)</label>
-          <select class="mt-1 w-full rounded-xl border-gray-300" wire:model.defer="assigned_user_id">
-            <option value="">— belum ditugaskan —</option>
-            @foreach($techs as $t)
-              <option value="{{ $t->id }}">{{ $t->name }}</option>
-            @endforeach
-          </select>
-        </div>
+<div class="space-y-1">
+  <label class="text-sm text-slate-600">Teknisi (opsional)</label>
+  <select wire:model="technician_id" class="input w-full">
+    <option value="">— pilih teknisi —</option>
+    @foreach($techs as $t)
+      <option value="{{ $t->id }}">{{ $t->name }}</option>
+    @endforeach
+  </select>
+  @error('technician_id') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
+</div>
+
 
         <div>
           <label class="text-sm">Status</label>

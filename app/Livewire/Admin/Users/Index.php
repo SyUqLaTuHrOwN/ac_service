@@ -2,114 +2,153 @@
 
 namespace App\Livewire\Admin\Users;
 
-use Livewire\Component;
-use Livewire\WithPagination;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Password;
 use App\Models\User;
 use App\Support\Role;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Hash;
+use Livewire\Component;
+use Livewire\WithPagination;
 
 class Index extends Component
 {
     use WithPagination;
 
-    public string $search = '';
-    public ?string $roleFilter = null;
+    public string $q = '';
+    public string $role = 'all';
 
-    // Modal ubah password
-    public ?int $editingUserId = null;
+    // edit modal
+    public bool $showEdit = false;
+    public ?int $editingId = null;
+    public string $name = '';
+    public string $email = '';
+    public ?string $phone = null;
+    public string $editRole = Role::CLIENT;
+
+    // change password modal
+    public bool $showPwd = false;
+    public ?int $pwdUserId = null;
     public string $new_password = '';
     public string $new_password_confirmation = '';
 
-    // Flash menampilkan password acak sekali (opsional; untuk dev)
-    public ?string $just_reset_password = null;
+    // delete modal
+    public bool $showDelete = false;
+    public ?int $deleteId = null;
 
-    // --- Guard sederhana agar hanya admin ---
-    protected function ensureAdmin(): void
+    protected function rules(): array
     {
-        $u = auth()->user();
-        if (!$u || $u->role !== Role::ADMIN) {
-            abort(403, 'Only admin can do this.');
-        }
+        return [
+            'name'  => ['required','string','max:120'],
+            'email' => [
+                'required','email','max:160',
+                Rule::unique('users','email')->ignore($this->editingId),
+            ],
+            'phone' => ['nullable','string','max:30'],
+            'editRole' => ['required', Rule::in([Role::ADMIN, Role::TEKNISI, Role::CLIENT])],
+        ];
     }
 
-    public function updatingSearch()    { $this->resetPage(); }
-    public function updatingRoleFilter(){ $this->resetPage(); }
+    public function updatingQ()    { $this->resetPage(); }
+    public function updatingRole() { $this->resetPage(); }
 
-    public function openChangePassword(int $userId): void
+    public function edit(int $id): void
     {
-        $this->ensureAdmin();
-        $user = User::findOrFail($userId);
-
-        $this->editingUserId = $user->id;
-        $this->new_password = '';
-        $this->new_password_confirmation = '';
-        $this->resetErrorBag();
-        $this->resetValidation();
+        $u = User::findOrFail($id);
+        $this->editingId = $u->id;
+        $this->name      = (string) $u->name;
+        $this->email     = (string) $u->email;
+        $this->phone     = (string) ($u->phone ?? '');
+        $this->editRole  = (string) $u->role;
+        $this->showEdit  = true;
     }
 
-    public function cancelChange(): void
+    public function save(): void
     {
-        $this->editingUserId = null;
-        $this->reset(['new_password','new_password_confirmation']);
-        $this->resetErrorBag();
-        $this->resetValidation();
+        $this->validate();
+
+        $u = User::findOrFail($this->editingId);
+        $u->update([
+            'name'  => $this->name,
+            'email' => $this->email,
+            'phone' => $this->phone ?: null,
+            'role'  => $this->editRole,
+        ]);
+
+        $this->showEdit = false;
+        $this->dispatch('toast', message: 'Akun diperbarui.', type: 'ok');
     }
 
-    public function saveChange(): void
+    public function openChangePassword(int $id): void
     {
-        $this->ensureAdmin();
+        $this->pwdUserId = $id;
+        $this->new_password = $this->new_password_confirmation = '';
+        $this->showPwd = true;
+    }
 
+    public function changePassword(): void
+    {
         $this->validate([
-            'new_password'              => ['required', Password::min(8)->letters()->numbers(), 'confirmed'],
-            'new_password_confirmation' => ['required'],
-        ], [], [
-            'new_password' => 'Password baru',
-        ]);
+            'new_password' => ['required','string','min:8','confirmed'],
+        ], [], ['new_password' => 'password baru']);
 
-        $user = User::findOrFail($this->editingUserId);
+        $u = User::findOrFail($this->pwdUserId);
+        $u->password = Hash::make($this->new_password);
+        $u->save();
 
-        $user->update([
-            'password' => Hash::make($this->new_password),
-        ]);
-
-        $this->cancelChange();
-        session()->flash('ok', 'Password pengguna berhasil diganti.');
+        $this->showPwd = false;
+        $this->dispatch('toast', message: 'Password diubah.', type: 'ok');
     }
 
-    public function resetRandom(int $userId): void
+    public function resetRandom(int $id): void
     {
-        $this->ensureAdmin();
+        $u = User::findOrFail($id);
+        $plain = str()->password(10); // Laravel helper (>=10.x)
+        $u->password = Hash::make($plain);
+        $u->save();
 
-        $user = User::findOrFail($userId);
+        $this->dispatch('toast', message: "Password baru: {$plain}", type: 'ok');
+    }
 
-        // Laravel 10+: Str::password(); kalau tidak ada, ganti ke Str::random(16)
-        $plain = method_exists(Str::class, 'password') ? Str::password(12) : Str::random(16);
+    public function confirmDelete(int $id): void
+    {
+        $this->deleteId = $id;
+        $this->showDelete = true;
+    }
 
-        $user->update([
-            'password' => Hash::make($plain),
-        ]);
+    public function destroy(): void
+    {
+        $u = User::findOrFail($this->deleteId);
 
-        // TAMPILKAN SEKALI (untuk dev). Produksi: kirim via email/notifikasi.
-        $this->just_reset_password = "Password baru {$user->email}: {$plain}";
-        session()->flash('ok', 'Password direset (acak).');
+        // Larangan aman: jangan hapus diri sendiri & jangan hapus admin terakhir
+        if (auth()->id() === $u->id) {
+            $this->dispatch('toast', message: 'Tidak bisa menghapus akun sendiri.', type: 'err');
+            $this->showDelete = false;
+            return;
+        }
+        if ($u->role === Role::ADMIN && User::where('role', Role::ADMIN)->count() <= 1) {
+            $this->dispatch('toast', message: 'Tidak bisa menghapus admin terakhir.', type: 'err');
+            $this->showDelete = false;
+            return;
+        }
+
+        $u->delete();
+        $this->showDelete = false;
+        $this->dispatch('toast', message: 'Akun dihapus.', type: 'ok');
     }
 
     public function render()
     {
-        $q = User::query()
-            ->when($this->search, function ($qq) {
-                $term = "%{$this->search}%";
-                $qq->where('name', 'like', $term)
-                   ->orWhere('email', 'like', $term);
-            })
-            ->when($this->roleFilter, fn($qq) => $qq->where('role', $this->roleFilter))
-            ->orderBy('name');
-
-        $users = $q->paginate(10);
+        $users = User::query()
+            ->when($this->q, fn($q) =>
+                $q->where(fn($w) => $w->where('name','like',"%{$this->q}%")
+                                     ->orWhere('email','like',"%{$this->q}%")))
+            ->when($this->role !== 'all', fn($q) => $q->where('role', $this->role))
+            ->orderBy('name')
+            ->paginate(12);
 
         return view('livewire.admin.users.index', compact('users'))
-            ->layout('layouts.app', ['title'=>'Pengguna','header'=>'Sistem • Pengguna']);
+            ->layout('layouts.app', [
+                'title'  => 'Pengguna',
+                'header' => 'Sistem • Pengguna',
+            ]);
     }
 }

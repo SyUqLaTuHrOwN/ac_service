@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .btn { @apply px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700; }
+  .btn-outline { @apply px-3 py-1.5 rounded-lg border hover:bg-slate-50; }
+  .input { @apply rounded-lg border px-3 py-1.5; }
+  .badge { @apply px-2 py-0.5 rounded bg-slate-100; }
+  .card { @apply rounded-2xl border bg-white; }
+  .tab { @apply px-3 py-1.5 rounded-lg border text-sm; }
+  .tab.active { @apply bg-indigo-600 text-white border-indigo-600; }
+  .link { @apply underline text-indigo-600; }
+}

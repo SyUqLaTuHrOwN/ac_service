@@ -26,10 +26,25 @@ class User extends Authenticatable
     {
         return $this->hasOne(Client::class, 'user_id');
     }
+    public function technicianProfile() {
+    return $this->hasOne(\App\Models\TechnicianProfile::class);
+}
 
     // Alias agar bisa dipakai whereDoesntHave('client')
     public function client()
     {
         return $this->hasOne(Client::class, 'user_id');
     }
+    public function leaves() {
+    return $this->hasMany(\App\Models\TechnicianLeave::class);
+}
+
+public function onLeave($date = null): bool
+{
+    $date = $date ? \Illuminate\Support\Carbon::parse($date) : now('Asia/Jakarta');
+    return $this->leaves()->approved()
+        ->whereDate('start_date','<=',$date->toDateString())
+        ->whereDate('end_date','>=',$date->toDateString())
+        ->exists();
+}
 }

@@ -19,10 +19,11 @@ use App\Livewire\Admin\Reports\Index as AdminReports;
 use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Admin\Settings\Index as AdminSettings;
 use App\Livewire\Admin\Register\Index as AdminRegister;
-
+use App\Livewire\Admin\TechLeaves\Index as AdminTechLeaves;
 // Teknisi
 use App\Livewire\Teknisi\Dashboard as TeknisiDashboard;
 use App\Livewire\Teknisi\Tasks\Index as TeknisiTasks;
+use App\Livewire\Teknisi\Leave\Index as TechLeaveIndex;
 
 // Client
 use App\Livewire\Client\Dashboard as ClientDashboard;
@@ -128,6 +129,7 @@ Route::middleware(['auth','verified'])->group(function () {
             Route::get('/schedules',    AdminSchedules::class)->name('schedules');
             Route::get('/technicians',  AdminTechnicians::class)->name('technicians');
             Route::get('/requests', \App\Livewire\Admin\Requests\Index::class)->name('requests');
+            Route::get('/tech-leaves', AdminTechLeaves::class)->name('tech-leaves');
 
 
             // laporan admin (verifikasi dsb)
@@ -147,6 +149,7 @@ Route::middleware(['auth','verified'])->group(function () {
         Route::get('/reports',   \App\Livewire\Teknisi\Reports\Index::class)->name('reports');
         Route::get('/history',   \App\Livewire\Teknisi\History\Index::class)->name('history');
         Route::get('/profile',   \App\Livewire\Teknisi\Profile\Index::class)->name('profile');
+         Route::get('/leave', TechLeaveIndex::class)->name('leave');
     });
 
     // ------------------ CLIENT ------------------
@@ -158,7 +161,7 @@ Route::middleware(['auth','verified'])->group(function () {
         Route::get('/schedules',  \App\Livewire\Client\Schedules\Index::class)->name('schedules');
         Route::get('/reports',    \App\Livewire\Client\Reports\Index::class)->name('reports');
         Route::get('/feedback',   \App\Livewire\Client\Feedback\Index::class)->name('feedback');
-        Route::get('/requests',   \App\Livewire\Client\Requests\Index::class)->name('requests');   // <—
+        Route::get('/requests',   \App\Livewire\Client\Requests\Index::class)->name('requests');
         Route::get('/complaints', \App\Livewire\Client\Complaints\Index::class)->name('complaints');
     });
 });
