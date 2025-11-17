@@ -6,25 +6,48 @@ use Illuminate\Database\Eloquent\Model;
 
 class Feedback extends Model
 {
-    // Jika tabel kamu bernama 'feedback' (bukan 'feedbacks'), wajib set:
     protected $table = 'feedback';
 
-    // ✅ Tambahkan client_user_id agar tidak dibuang saat create()
     protected $fillable = [
         'report_id',
-        'client_user_id',  // <— penting
+        'client_user_id',
         'rating',
         'comment',
-        // kalau kamu pakai nama lain seperti 'given_by_user', pakai itu di sini
+        'is_public',
+        'approved_at',
     ];
 
-    public function report()
-    {
-        return $this->belongsTo(\App\Models\MaintenanceReport::class, 'report_id');
-    }
+    protected $casts = [
+        'is_public'   => 'boolean',
+        'approved_at' => 'datetime',
+    ];
 
     public function clientUser()
     {
-        return $this->belongsTo(\App\Models\User::class, 'client_user_id');
+        return $this->belongsTo(User::class, 'client_user_id');
+    }
+
+    public function report()
+    {
+        return $this->belongsTo(MaintenanceReport::class, 'report_id');
+    }
+
+    // memudahkan akses jadwal dari feedback
+    public function schedule()
+    {
+        return $this->hasOneThrough(
+            MaintenanceSchedule::class,
+            MaintenanceReport::class,
+            'id',          // key di reports
+            'id',          // key di schedules
+            'report_id',   // FK feedback -> reports
+            'schedule_id'  // FK reports -> schedules
+        );
+    }
+
+    // hanya yang disetujui admin
+    public function scopePublished($q)
+    {
+        return $q->where('is_public', true)->whereNotNull('approved_at');
     }
 }

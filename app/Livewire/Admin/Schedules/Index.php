@@ -18,57 +18,54 @@ class Index extends Component
 {
     use WithPagination;
 
-    // Filter list
+    // FILTER
+    public ?string $search = '';
     public ?int $clientFilter = null;
-    public ?int $statusFilter = null; // 1: menunggu, 2: dalam_proses, 3: selesai_servis, 4: selesai
-    public string $search = '';
+    public ?int $statusFilter = null;
 
-    // Form state
-    public ?int $editingId = null;
+    // FORM
     public ?int $client_id = null;
     public ?int $location_id = null;
     public ?string $scheduled_at = null;
-    public ?int $assigned_user_id = null;
-    public ?int $technician_id = null;   // ⬅️ BARU
+    public ?int $assigned_user_id = null; // teknisi yang ditugaskan (nullable)
     public string $status = 'menunggu';
     public ?string $notes = null;
-
-    // pilih banyak unit
     public array $unit_ids = [];
+
+    public ?int $editingId = null;
 
     protected function rules(): array
     {
         return [
-            'client_id'        => ['required','exists:clients,id'],
-            'location_id'      => ['required','exists:locations,id'],
-            'scheduled_at'     => ['required','date'],
-            'assigned_user_id' => ['nullable','exists:users,id'],
-            'technician_id'    => ['nullable','exists:users,id'], // ⬅️ BARU (opsional)
-            'status'           => ['required','string','max:50'],
-            'notes'            => ['nullable','string'],
+            'client_id'        => ['required', 'exists:clients,id'],
+            'location_id'      => ['required', 'exists:locations,id'],
+            'scheduled_at'     => ['required', 'date'],
+            'assigned_user_id' => ['nullable', 'exists:users,id'],
+            'status'           => ['required', 'string'],
+            'notes'            => ['nullable', 'string'],
             'unit_ids'         => ['array'],
-            'unit_ids.*'       => ['integer','exists:unit_acs,id'],
+            'unit_ids.*'       => ['integer', 'exists:unit_acs,id'],
         ];
     }
 
-    public function updatedClientId(): void
+    public function updatedClientId()
     {
         $this->location_id = null;
         $this->unit_ids = [];
     }
 
-    public function updatedLocationId(): void
+    public function updatedLocationId()
     {
         $this->unit_ids = [];
     }
 
-    public function createNew(): void
+    public function createNew()
     {
         $this->resetForm();
         $this->editingId = 0;
     }
 
-    public function edit(int $id): void
+    public function edit(int $id)
     {
         $this->resetErrorBag();
         $this->editingId = $id;
@@ -78,142 +75,144 @@ class Index extends Component
         $this->client_id        = $s->client_id;
         $this->location_id      = $s->location_id;
         $this->scheduled_at     = $s->scheduled_at?->format('Y-m-d\TH:i');
-        $this->assigned_user_id = $s->assigned_user_id;
-        $this->technician_id    = $s->technician_id;   // ⬅️ BARU
+        $this->assigned_user_id = $s->assigned_user_id; // ambil nilai dari db (bisa null)
         $this->status           = $s->status;
         $this->notes            = $s->notes;
-
-        $this->unit_ids = $s->units->pluck('id')->toArray();
+        $this->unit_ids         = $s->units->pluck('id')->toArray();
     }
 
- public function save(): void
-{
-    $data = $this->validate();
+    public function save()
+    {
+        $data = $this->validate();
 
-    // ❗ Blokir jadwal pada hari cuti teknisi
-    if (!empty($data['assigned_user_id']) && !empty($data['scheduled_at'])) {
-        $overlap = TechnicianLeave::approved()
-            ->where('user_id', $data['assigned_user_id'])
-            ->overlaps(\Carbon\Carbon::parse($data['scheduled_at']))
-            ->exists();
+        // CEK TEKNISI SEDANG CUTI HANYA JIKA DIPILIH
+        if (!empty($data['assigned_user_id'])) {
+            $date = Carbon::parse($data['scheduled_at']);
 
-        if ($overlap) {
-            throw ValidationException::withMessages([
-                'assigned_user_id' => 'Teknisi sedang cuti pada tanggal tersebut.',
+            $isOnLeave = TechnicianLeave::approved()
+                ->where('user_id', $data['assigned_user_id'])
+                ->whereDate('start_date', '<=', $date)
+                ->whereDate('end_date', '>=', $date)
+                ->exists();
+
+            if ($isOnLeave) {
+                throw ValidationException::withMessages([
+                    'assigned_user_id' => 'Teknisi sedang CUTI pada tanggal tersebut.',
+                ]);
+            }
+        }
+
+        // SIMPAN (update/create)
+        if ($this->editingId && $this->editingId > 0) {
+            $schedule = MaintenanceSchedule::findOrFail($this->editingId);
+            // update with validated fields (works because fillable set)
+            $schedule->update([
+                'client_id'        => $data['client_id'],
+                'location_id'      => $data['location_id'],
+                'scheduled_at'     => $data['scheduled_at'],
+                'assigned_user_id' => $data['assigned_user_id'] ?? null,
+                'status'           => $data['status'],
+                'notes'            => $data['notes'] ?? null,
+            ]);
+        } else {
+            $schedule = MaintenanceSchedule::create([
+                'client_id'        => $data['client_id'],
+                'location_id'      => $data['location_id'],
+                'scheduled_at'     => $data['scheduled_at'],
+                'assigned_user_id' => $data['assigned_user_id'] ?? null,
+                'status'           => $data['status'],
+                'notes'            => $data['notes'] ?? null,
             ]);
         }
+
+        // sync units
+        $schedule->units()->sync($this->unit_ids);
+
+        session()->flash('ok', $this->editingId ? 'Jadwal diperbarui.' : 'Jadwal dibuat.');
+
+        $this->resetForm();
+        $this->editingId = null;
     }
 
-    // lanjut proses simpan seperti sebelumnya...
-    if ($this->editingId && $this->editingId > 0) {
-        $schedule = \App\Models\MaintenanceSchedule::findOrFail($this->editingId);
-        $schedule->update($data);
-    } else {
-        $schedule = \App\Models\MaintenanceSchedule::create($data);
-    }
-    $schedule->units()->sync($this->unit_ids);
-
-    session()->flash('ok', $this->editingId ? 'Jadwal diperbarui.' : 'Jadwal dibuat.');
-    $this->resetForm();
-    $this->editingId = null;
-}
-    public function delete(int $id): void
+    public function delete(int $id)
     {
         MaintenanceSchedule::findOrFail($id)->delete();
-        session()->flash('ok','Jadwal dihapus.');
+        session()->flash('ok', 'Jadwal dihapus.');
         $this->resetPage();
     }
 
-    public function approveReschedule(int $id): void
-    {
-        $s = MaintenanceSchedule::findOrFail($id);
-
-        if (!$s->has_pending_reschedule) {
-            session()->flash('err', 'Tidak ada permintaan reschedule yang menunggu.');
-            return;
-        }
-
-        $s->scheduled_at          = $s->client_requested_date;
-        $s->client_response       = 'confirmed';
-        $s->client_response_at    = now();
-        $s->client_response_note  = null;
-        $s->client_requested_date = null;
-        $s->status                = 'menunggu';
-        $s->save();
-
-        session()->flash('ok', 'Permintaan jadwal ulang disetujui & jadwal diperbarui.');
-    }
-
-    public function rejectReschedule(int $id): void
-    {
-        $s = MaintenanceSchedule::findOrFail($id);
-
-        if (!$s->has_pending_reschedule) {
-            session()->flash('err', 'Tidak ada permintaan reschedule yang menunggu.');
-            return;
-        }
-
-        $s->client_response       = null;
-        $s->client_response_at    = now();
-        $s->client_response_note  = null;
-        $s->client_requested_date = null;
-        $s->status                = 'menunggu';
-        $s->save();
-
-        session()->flash('ok', 'Usulan jadwal ulang ditolak. Jadwal tetap.');
-    }
-
-    private function resetForm(): void
+    private function resetForm()
     {
         $this->reset([
-            'client_id','location_id','scheduled_at','assigned_user_id',
-            'technician_id', // ⬅️ BARU
-            'status','notes','unit_ids'
+            'client_id',
+            'location_id',
+            'scheduled_at',
+            'assigned_user_id',
+            'status',
+            'notes',
+            'unit_ids'
         ]);
+
         $this->status = 'menunggu';
         $this->unit_ids = [];
     }
 
     public function render()
     {
-        $clients = Client::orderBy('company_name')->get(['id','company_name']);
+        $clients = Client::orderBy('company_name')->get(['id', 'company_name']);
 
-        $locationsForForm = collect();
-        if ($this->client_id) {
-            $locationsForForm = Location::where('client_id', $this->client_id)
-                ->orderBy('name')->get(['id','name']);
+        $locations = $this->client_id
+            ? Location::where('client_id', $this->client_id)->orderBy('name')->get(['id', 'name'])
+            : collect();
+
+        // Ambil semua teknisi dengan profil
+        $allTechs = User::with('technicianProfile')
+            ->where('role', Role::TEKNISI)
+            ->orderBy('name')
+            ->get();
+
+        // Filter teknisi: harus punya profil, aktif, dan tidak sedang cuti
+        $availableTechs = $allTechs->filter(function ($tech) {
+            if (!$tech->technicianProfile) return false;
+            if (!$tech->technicianProfile->is_active) return false;
+            return !$tech->isOnLeave();
+        })->values();
+
+        // Jika kita sedang edit dan jadwal ini sudah punya assigned_user_id,
+        // pastikan teknisi yang sudah terpasang tetap ada di daftar option
+        if ($this->editingId && $this->assigned_user_id) {
+            $already = $availableTechs->firstWhere('id', $this->assigned_user_id);
+            if (!$already) {
+                $current = $allTechs->firstWhere('id', $this->assigned_user_id);
+                if ($current) {
+                    // tambahkan ke akhir daftar (tetap tampil meskipun cuti/nonaktif)
+                    $availableTechs->push($current);
+                }
+            }
         }
 
-        $techs = User::where('role', Role::TEKNISI)->orderBy('name')->get(['id','name']); // ⬅️ dipakai dropdown
+        $units = $this->location_id
+            ? UnitAc::where('location_id', $this->location_id)->orderBy('brand')->get()
+            : collect();
 
-        $unitsForLocation = collect();
-        if ($this->location_id) {
-            $unitsForLocation = UnitAc::where('location_id', $this->location_id)
-                ->orderBy('brand')->orderBy('model')
-                ->get(['id','brand','model','serial_number']);
-        }
-
-        $q = MaintenanceSchedule::with(['client','location','technician','units'])
-            ->when($this->clientFilter, fn($qq)=>$qq->where('client_id',$this->clientFilter))
-            ->when($this->statusFilter, function($qq){
-                $map = [1=>'menunggu',2=>'dalam_proses',3=>'selesai_servis',4=>'selesai'];
-                $status = $map[$this->statusFilter] ?? null;
-                if ($status) $qq->where('status', $status);
-            })
-            ->when($this->search, fn($qq)=>$qq->where('notes','like',"%{$this->search}%"))
-            ->orderBy('scheduled_at','desc');
-
-        $schedules = $q->paginate(10);
+        $schedules = MaintenanceSchedule::with(['client', 'location', 'technician', 'units'])
+            ->when($this->clientFilter, fn($q) => $q->where('client_id', $this->clientFilter))
+            ->when($this->statusFilter, fn($q) => $q->where('status', $this->statusFilter))
+            ->when($this->search, fn($q) =>
+                $q->where('notes', 'like', '%' . $this->search . '%')
+            )
+            ->orderBy('scheduled_at', 'desc')
+            ->paginate(10);
 
         return view('livewire.admin.schedules.index', [
-            'clients'          => $clients,
-            'locations'        => $locationsForForm,
-            'techs'            => $techs,
-            'schedules'        => $schedules,
-            'unitsForLocation' => $unitsForLocation,
+            'clients'           => $clients,
+            'locations'         => $locations,
+            'techs'             => $availableTechs,
+            'schedules'         => $schedules,
+            'unitsForLocation'  => $units,
         ])->layout('layouts.app', [
-            'title'=>'Jadwal Maintenance',
-            'header'=>'Operasional • Jadwal',
+            'title'  => 'Jadwal Maintenance',
+            'header' => 'Operasional • Jadwal',
         ]);
     }
 }

@@ -65,6 +65,12 @@ $off  = 'text-slate-700 hover:bg-slate-100';
     <svg class="h-5 w-5 opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path d="M21 15a4 4 0 01-4 4H7l-4 4V7a4 4 0 014-4h10a4 4 0 014 4z"/>
     </svg>
+@elseif($icon === 'star')
+  <svg class="h-5 w-5 opacity-90" viewBox="0 0 24 24"
+       fill="{{ $active ? 'currentColor' : 'none' }}"
+       stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+    <path d="M12 2l2.77 5.62 6.2.9-4.49 4.37 1.06 6.14L12 16.9 6.46 19.03l1.06-6.14L3.03 8.52l6.2-.9L12 2z"/>
+  </svg>
   @elseif($icon === 'alert')
     <svg class="h-5 w-5 opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>

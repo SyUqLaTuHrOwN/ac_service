@@ -13,6 +13,11 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
+    'company' => [
+        'whatsapp'  => env('COMPANY_WHATSAPP', '6281234567890'),
+        'email'     => env('COMPANY_EMAIL', 'support@example.com'),
+        'instagram' => env('COMPANY_INSTAGRAM', 'coolcare.ac'),
+    ],
 
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),

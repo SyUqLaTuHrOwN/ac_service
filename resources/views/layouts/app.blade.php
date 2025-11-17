@@ -61,6 +61,10 @@
           <x-nav.link :href="route('admin.requests')"    :active="request()->routeIs('admin.requests')"    icon="inbox">Permintaan</x-nav.link>
           <x-nav.link :href="route('admin.technicians')" :active="request()->routeIs('admin.technicians')" icon="wrench">Teknisi</x-nav.link>
           <x-nav.link :href="route('admin.tech-leaves')" :active="request()->routeIs('admin.tech-leaves')" icon="inbox">Permintaan Cuti Teknisi</x-nav.link>
+          <x-nav.link :href="route('admin.feedbacks')" :active="request()->routeIs('admin.feedbacks')" icon="star">
+  Ulasan Pelanggan
+</x-nav.link>
+
 
           <x-nav.section title="Sistem" />
           <x-nav.link :href="route('admin.users')"       :active="request()->routeIs('admin.users')"       icon="users">Pengguna</x-nav.link>
@@ -72,6 +76,10 @@
           <x-nav.link :href="route('teknisi.tasks')"     :active="request()->routeIs('teknisi.tasks')"     icon="calendar">Tugas Saya</x-nav.link>
           <x-nav.link :href="route('teknisi.reports')"   :active="request()->routeIs('teknisi.reports')"   icon="doc">Laporan</x-nav.link>
           <x-nav.link :href="route('teknisi.history')"   :active="request()->routeIs('teknisi.history')"   icon="clock">Riwayat</x-nav.link>
+          <x-nav.link :href="route('teknisi.feedbacks')" :active="request()->routeIs('teknisi.feedbacks')" icon="star">
+  Ulasan Pelanggan
+</x-nav.link>
+
           <x-nav.link :href="route('teknisi.leave')"     :active="request()->routeIs('teknisi.leave')" icon="inbox">Ajukan Cuti</x-nav.link>
           <x-nav.link :href="route('teknisi.profile')"   :active="request()->routeIs('teknisi.profile')"   icon="user">Profil</x-nav.link>
 

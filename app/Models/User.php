@@ -6,45 +6,94 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Support\Role;
+use Illuminate\Support\Carbon;
 
-/**
- * @mixin IdeHelperUser
- */
 class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    protected $fillable = ['name','email','password','phone','role'];
-    protected $hidden   = ['password','remember_token'];
+    protected $fillable = [
+        'name','email','password','phone','role'
+    ];
 
-    public function isAdmin(): bool   { return $this->role === Role::ADMIN; }
-    public function isTeknisi(): bool { return $this->role === Role::TEKNISI; }
-    public function isClient(): bool  { return $this->role === Role::CLIENT; }
+    protected $hidden = [
+        'password','remember_token'
+    ];
 
-    // Relasi ke Client (user_id pada tabel clients)
+    public function isAdmin(): bool
+    {
+        return $this->role === Role::ADMIN;
+    }
+
+    public function isTeknisi(): bool
+    {
+        return $this->role === Role::TEKNISI;
+    }
+
+    public function isClient(): bool
+    {
+        return $this->role === Role::CLIENT;
+    }
+
+    /* ===========================
+       RELATION
+    ============================ */
+
     public function clientProfile()
     {
         return $this->hasOne(Client::class, 'user_id');
     }
-    public function technicianProfile() {
-    return $this->hasOne(\App\Models\TechnicianProfile::class);
-}
 
-    // Alias agar bisa dipakai whereDoesntHave('client')
     public function client()
     {
         return $this->hasOne(Client::class, 'user_id');
     }
-    public function leaves() {
-    return $this->hasMany(\App\Models\TechnicianLeave::class);
-}
 
-public function onLeave($date = null): bool
-{
-    $date = $date ? \Illuminate\Support\Carbon::parse($date) : now('Asia/Jakarta');
-    return $this->leaves()->approved()
-        ->whereDate('start_date','<=',$date->toDateString())
-        ->whereDate('end_date','>=',$date->toDateString())
-        ->exists();
-}
+    public function technicianProfile()
+    {
+        return $this->hasOne(TechnicianProfile::class, 'user_id');
+    }
+
+    public function leaves()
+    {
+        return $this->hasMany(TechnicianLeave::class, 'user_id');
+    }
+
+    public function approvedLeaves()
+    {
+        return $this->leaves()->approved();
+    }
+
+    /* ===========================
+       LOGIC: CEK CUTI HARI INI / TGL TERTENTU
+    ============================ */
+
+    public function isOnLeave($date = null): bool
+    {
+        $d = $date
+            ? Carbon::parse($date)->toDateString()
+            : now('Asia/Jakarta')->toDateString();
+
+        return $this->approvedLeaves()
+            ->whereDate('start_date', '<=', $d)
+            ->whereDate('end_date', '>=', $d)
+            ->exists();
+    }
+
+    /* ===========================
+       ACCESSOR: STATUS LIVE
+       Digunakan di tabel teknisi
+    ============================ */
+
+    public function getLeaveStatusAttribute(): string
+    {
+        if ($this->isOnLeave()) {
+            // jika ingin mendeteksi jenis cuti (izin/sakit/cuti), bisa tambahkan di sini
+            return 'cuti';
+        }
+
+        $active = optional($this->technicianProfile)->is_active;
+
+        return $active === 0 ? 'nonaktif' : 'aktif';
+    }
 }

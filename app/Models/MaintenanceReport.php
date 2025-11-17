@@ -50,9 +50,9 @@ class MaintenanceReport extends Model
         return $this->belongsTo(\App\Models\User::class, 'verified_by_admin_id');
     }
 
-      public function feedback()
-    {
-        // satu laporan punya satu feedback dari client
-        return $this->hasOne(\App\Models\Feedback::class, 'report_id');
-    }
+    public function feedback()
+{
+    return $this->hasOne(\App\Models\Feedback::class, 'report_id');
+}
+
 }

@@ -20,10 +20,12 @@ use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Admin\Settings\Index as AdminSettings;
 use App\Livewire\Admin\Register\Index as AdminRegister;
 use App\Livewire\Admin\TechLeaves\Index as AdminTechLeaves;
+use App\Livewire\Admin\Feedbacks\Index as AdminFeedbacksIndex;
 // Teknisi
 use App\Livewire\Teknisi\Dashboard as TeknisiDashboard;
 use App\Livewire\Teknisi\Tasks\Index as TeknisiTasks;
 use App\Livewire\Teknisi\Leave\Index as TechLeaveIndex;
+use App\Livewire\Teknisi\Feedbacks\Index as TechFeedbacksIndex;
 
 // Client
 use App\Livewire\Client\Dashboard as ClientDashboard;
@@ -130,6 +132,8 @@ Route::middleware(['auth','verified'])->group(function () {
             Route::get('/technicians',  AdminTechnicians::class)->name('technicians');
             Route::get('/requests', \App\Livewire\Admin\Requests\Index::class)->name('requests');
             Route::get('/tech-leaves', AdminTechLeaves::class)->name('tech-leaves');
+            Route::get('/feedbacks', \App\Livewire\Admin\Feedbacks\Index::class)->name('feedbacks');
+
 
 
             // laporan admin (verifikasi dsb)
@@ -148,6 +152,8 @@ Route::middleware(['auth','verified'])->group(function () {
         Route::get('/tasks',     \App\Livewire\Teknisi\Tasks\Index::class)->name('tasks');
         Route::get('/reports',   \App\Livewire\Teknisi\Reports\Index::class)->name('reports');
         Route::get('/history',   \App\Livewire\Teknisi\History\Index::class)->name('history');
+        Route::get('/feedbacks', \App\Livewire\Teknisi\Feedbacks\Index::class)->name('feedbacks');
+
         Route::get('/profile',   \App\Livewire\Teknisi\Profile\Index::class)->name('profile');
          Route::get('/leave', TechLeaveIndex::class)->name('leave');
     });
