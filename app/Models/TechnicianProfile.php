@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
 
 class TechnicianProfile extends Model
 {
@@ -18,30 +17,34 @@ class TechnicianProfile extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function getAutoStatusAttribute()
+    public function markAsActive()
+{
+    $this->update([
+        'status' => 'aktif',
+        'is_busy' => false
+    ]);
+}
+
+
+    public function markAsBusy()
+{
+    $this->update([
+        'is_busy' => true
+    ]);
+}
+
+
+    public function markAsOnLeave(): void
     {
-        if (!$this->is_active) return 'nonaktif';
+        $this->update(['status' => 'cuti']);
+    }
 
-        $today = now('Asia/Jakarta')->toDateString();
-        $user  = $this->user;
+    public function getAutoStatusAttribute(): string
+    {
+        if (! $this->is_active) {
+            return 'nonaktif';
+        }
 
-        // sedang cuti
-        $onLeave = $user->technicianLeaves()
-            ->where('status','approved')
-            ->whereDate('start_date','<=',$today)
-            ->whereDate('end_date','>=',$today)
-            ->exists();
-
-        if ($onLeave) return 'cuti';
-
-        // sedang bertugas
-        $busy = $user->maintenanceSchedules()
-            ->whereIn('status',['menunggu','dalam_proses'])
-            ->whereDate('scheduled_at',$today)
-            ->exists();
-
-        if ($busy) return 'sedang_bertugas';
-
-        return 'aktif';
+        return $this->status ?? 'aktif';
     }
 }

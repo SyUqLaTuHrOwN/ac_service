@@ -22,46 +22,58 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ⛔ Jangan jalankan logic otomatis saat CLI (config:cache, migrate, optimize)
+        if (app()->runningInConsole()) {
+            return;
+        }
+
         $today = now('Asia/Jakarta')->toDateString();
 
         /*
         |--------------------------------------------------------------------------
-        | 1) Auto Aktifkan Teknisi Yang Selesai Cuti
+        | 1) Auto Aktifkan Teknisi Yang Selesai Cuti 
         |--------------------------------------------------------------------------
         */
         TechnicianProfile::where('status', 'cuti')
             ->with('user.technicianLeaves')
-            ->get()
-            ->each(function ($p) use ($today) {
+            ->chunk(50, function ($profiles) use ($today) {
 
-                $leaveFinished = $p->user->technicianLeaves()
-                    ->approved()
-                    ->whereDate('end_date', '<', $today)
-                    ->exists();
+                foreach ($profiles as $p) {
 
-                if ($leaveFinished) {
-                    $p->markAsActive(); // method dari model
+                    if (!$p->user) continue;
+
+                    $leaveFinished = $p->user->technicianLeaves()
+                        ->approved()
+                        ->whereDate('end_date', '<', $today)
+                        ->exists();
+
+                    if ($leaveFinished && method_exists($p, 'markAsActive')) {
+                        $p->markAsActive();
+                    }
                 }
             });
 
-
         /*
         |--------------------------------------------------------------------------
-        | 2) Tandai Teknisi Sedang Bertugas (jika ada jadwal hari ini)
+        | 2) Tandai Teknisi Sedang Bertugas (jadwal hari ini)
         |--------------------------------------------------------------------------
         */
         TechnicianProfile::where('is_active', 1)
             ->with('user')
-            ->get()
-            ->each(function ($p) use ($today) {
+            ->chunk(50, function ($profiles) use ($today) {
 
-                $hasJobToday = MaintenanceSchedule::where('assigned_user_id', $p->user_id)
-                    ->whereDate('scheduled_at', $today)
-                    ->whereIn('status', ['menunggu', 'dalam_proses'])
-                    ->exists();
+                foreach ($profiles as $p) {
 
-                if ($hasJobToday) {
-                    $p->markAsBusy(); // method dari model
+                    if (!$p->user) continue;
+
+                    $hasJobToday = MaintenanceSchedule::where('assigned_user_id', $p->user_id)
+                        ->whereDate('scheduled_at', $today)
+                        ->whereIn('status', ['menunggu', 'dalam_proses'])
+                        ->exists();
+
+                    if ($hasJobToday && method_exists($p, 'markAsBusy')) {
+                        $p->markAsBusy();
+                    }
                 }
             });
     }

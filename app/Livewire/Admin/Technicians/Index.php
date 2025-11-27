@@ -154,8 +154,13 @@ class Index extends Component
                   ->orWhereHas('user', fn($u)=>$u->where('email','like',$s));
             })
             ->when($this->statusFilter !== 'all', function ($q) {
-                $q->where('status', $this->statusFilter);
-            })
+    if ($this->statusFilter === 'nonaktif') {
+        $q->where('is_active', false);
+    } else {
+        $q->where('status', $this->statusFilter)->where('is_active', true);
+    }
+})
+
             ->orderBy('team_name')
             ->paginate(10);
 
